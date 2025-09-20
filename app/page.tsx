@@ -205,49 +205,25 @@ export default function Home() {
     }
   }, []);
 
-  const handleDownload = async (fileId: number, fileName: string) => {
-    try {
-      setDownloadProgress((prev) => ({ ...prev, [fileId]: 0 }));
+  const handleDownload = (fileId: number, fileName: string) => {
+    console.log("Downloading file:", fileId, fileName);
 
-      const response = await fetch(`/api/download/${fileId}`);
-      const reader = response.body?.getReader();
-      const contentLength = response.headers.get("Content-Length");
-      const totalLength = contentLength ? parseInt(contentLength) : 0;
+    // Create download link
+    const link = document.createElement("a");
+    link.href = `/api/download/${fileId}`;
+    link.download = fileName;
 
-      let receivedLength = 0;
-      let chunks = [];
+    // Optional: Add some attributes for better handling
+    link.target = "_blank"; // Open in new tab (optional)
+    link.rel = "noopener noreferrer";
+    link.style.display = "none";
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-          if (done) break;
-
-          chunks.push(value);
-          receivedLength += value.length;
-
-          // Update progress
-          const progress = totalLength
-            ? Math.round((receivedLength / totalLength) * 100)
-            : 0;
-          setDownloadProgress((prev) => ({ ...prev, [fileId]: progress }));
-        }
-      }
-
-      // Create blob and download
-      const blob = new Blob(chunks);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      window.URL.revokeObjectURL(url);
-
-      setDownloadProgress((prev) => ({ ...prev, [fileId]: -1 })); // Reset
-    } catch (error) {
-      console.error("Download error:", error);
-      setDownloadProgress((prev) => ({ ...prev, [fileId]: -1 }));
-    }
+    console.log("Download initiated successfully");
   };
 
   const handleDelete = async (fileId: number) => {
