@@ -23,6 +23,7 @@ export default function Home() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [uploading, setUploading] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   useEffect(() => {
     fetchFiles();
@@ -46,30 +47,46 @@ export default function Home() {
     if (!selectedFile) return alert("Please select a file first");
 
     setUploading(true);
+    setUploadProgress(0);
+
     const formData = new FormData();
     formData.append("file", selectedFile);
 
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data: ApiResponse = await res.json();
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
 
-      if (data.success) {
-        alert("File uploaded successfully!");
-        setSelectedFile(null);
-        (document.getElementById("fileInput") as HTMLInputElement).value = "";
-        await fetchFiles();
-      } else {
-        alert("Upload failed: " + data.error);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        setUploadProgress(percent);
       }
-    } catch (err) {
-      alert("Upload failed");
-      console.error("Upload error:", err);
-    } finally {
+    };
+
+    xhr.onload = async () => {
       setUploading(false);
-    }
+      setUploadProgress(0);
+      if (xhr.status === 200) {
+        const data: ApiResponse = JSON.parse(xhr.responseText);
+        if (data.success) {
+          alert("File uploaded successfully!");
+          setSelectedFile(null);
+          (document.getElementById("fileInput") as HTMLInputElement).value = "";
+          await fetchFiles();
+        } else {
+          alert("Upload failed: " + data.error);
+        }
+      } else {
+        alert("Upload failed");
+      }
+    };
+
+    xhr.onerror = () => {
+      setUploading(false);
+      setUploadProgress(0);
+      alert("Upload failed");
+    };
+
+    xhr.send(formData);
   };
 
   const handleDownload = (fileId: number, fileName: string) => {
@@ -229,6 +246,19 @@ export default function Home() {
             </div>
           )}
         </section>
+        {uploading && (
+          <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+            <div
+              className="bg-blue-600 h-3 rounded-full transition-all"
+              style={{ width: `${uploadProgress}%` }}
+            ></div>
+          </div>
+        )}
+        {uploadProgress > 0 && (
+          <p className="text-sm text-gray-700 mt-1">
+            {uploadProgress}% uploaded
+          </p>
+        )}
       </div>
     </main>
   );
