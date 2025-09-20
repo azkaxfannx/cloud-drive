@@ -72,10 +72,6 @@ export async function GET(
           file.originalName
         )}"`,
         "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600", // Cache 1 jam
-        ETag: `"${fileId}"`, // Untuk conditional requests
-        "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'",
       };
 
       return new Response(fileStream as any, {
