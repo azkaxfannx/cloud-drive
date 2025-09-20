@@ -30,6 +30,9 @@ export default function Home() {
   const [uploading, setUploading] = useState<boolean>(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // Ubah ke array
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<{
+    [key: number]: number;
+  }>({});
 
   useEffect(() => {
     fetchFiles();
@@ -202,23 +205,48 @@ export default function Home() {
     }
   }, []);
 
-  // page.tsx - ganti handleDownload
   const handleDownload = async (fileId: number, fileName: string) => {
     try {
-      const response = await fetch(`/api/download/${fileId}`);
-      const blob = await response.blob();
+      setDownloadProgress((prev) => ({ ...prev, [fileId]: 0 }));
 
+      const response = await fetch(`/api/download/${fileId}`);
+      const reader = response.body?.getReader();
+      const contentLength = response.headers.get("Content-Length");
+      const totalLength = contentLength ? parseInt(contentLength) : 0;
+
+      let receivedLength = 0;
+      let chunks = [];
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          chunks.push(value);
+          receivedLength += value.length;
+
+          // Update progress
+          const progress = totalLength
+            ? Math.round((receivedLength / totalLength) * 100)
+            : 0;
+          setDownloadProgress((prev) => ({ ...prev, [fileId]: progress }));
+        }
+      }
+
+      // Create blob and download
+      const blob = new Blob(chunks);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = fileName;
       link.click();
-
-      // Cleanup
       window.URL.revokeObjectURL(url);
+
+      setDownloadProgress((prev) => ({ ...prev, [fileId]: -1 })); // Reset
     } catch (error) {
       console.error("Download error:", error);
-      alert("Download failed");
+      setDownloadProgress((prev) => ({ ...prev, [fileId]: -1 }));
     }
   };
 
