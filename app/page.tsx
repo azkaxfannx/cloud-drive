@@ -64,6 +64,15 @@ export default function Home() {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/api/upload-chunk");
 
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            uploadedBytes += chunk.size; // update uploaded bytes
+            resolve();
+          } else {
+            reject(new Error(`Chunk upload failed: ${xhr.statusText}`));
+          }
+        };
+
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             // Update progress berdasarkan total file
@@ -73,15 +82,6 @@ export default function Home() {
                 ((uploadedBytes + chunkProgress) / selectedFile.size) * 100
               )
             );
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            uploadedBytes += chunk.size; // update uploaded bytes
-            resolve();
-          } else {
-            reject(new Error(`Chunk upload failed: ${xhr.statusText}`));
           }
         };
 
