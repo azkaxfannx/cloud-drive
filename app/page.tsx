@@ -182,11 +182,44 @@ export default function Home() {
     setUploading(false);
   };
 
-  const handleDownload = (fileId: number, fileName: string) => {
-    const link = document.createElement("a");
-    link.href = `/api/download/${fileId}`;
-    link.download = fileName;
-    link.click();
+  // page.tsx
+  useEffect(() => {
+    // Network detection
+    const updateNetworkStatus = () => {
+      if ("connection" in navigator) {
+        const connection = (navigator as any).connection;
+        if (connection) {
+          console.log("Network type:", connection.effectiveType);
+          console.log("Download speed:", connection.downlink, "Mbps");
+        }
+      }
+    };
+
+    updateNetworkStatus();
+    if ("connection" in navigator) {
+      const connection = (navigator as any).connection;
+      connection?.addEventListener("change", updateNetworkStatus);
+    }
+  }, []);
+
+  // page.tsx - ganti handleDownload
+  const handleDownload = async (fileId: number, fileName: string) => {
+    try {
+      const response = await fetch(`/api/download/${fileId}`);
+      const blob = await response.blob();
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download error:", error);
+      alert("Download failed");
+    }
   };
 
   const handleDelete = async (fileId: number) => {
