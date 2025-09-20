@@ -16,15 +16,28 @@ export async function POST(req: Request) {
   }
 
   const uploadDir = process.env.STORAGE_PATH || "D:/cloud_drive/chunks/";
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-  const buffer = Buffer.from(await chunk.arrayBuffer());
   const fileDir = path.join(uploadDir, fileId);
-  if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
-
-  // ACTUALLY WRITE THE CHUNK TO DISK (this was missing)
   const chunkPath = path.join(fileDir, `${chunkIndex}`);
-  fs.writeFileSync(chunkPath, buffer);
 
-  return NextResponse.json({ success: true });
+  try {
+    // Ensure directories exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true, mode: 0o755 });
+    }
+    if (!fs.existsSync(fileDir)) {
+      fs.mkdirSync(fileDir, { recursive: true, mode: 0o755 });
+    }
+
+    // Use async file writing
+    const buffer = Buffer.from(await chunk.arrayBuffer());
+    await fs.promises.writeFile(chunkPath, buffer);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Chunk upload error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to save chunk" },
+      { status: 500 }
+    );
+  }
 }
