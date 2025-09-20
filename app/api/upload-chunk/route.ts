@@ -19,8 +19,9 @@ export async function POST(req: Request) {
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
   const buffer = Buffer.from(await chunk.arrayBuffer());
-  const chunkPath = path.join(uploadDir, `${fileId}-${chunkIndex}`);
-  fs.writeFileSync(chunkPath, buffer);
+  const fileDir = path.join(uploadDir, fileId);
+  if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
+  const chunkPath = path.join(fileDir, `${chunkIndex}`);
 
   return NextResponse.json({ success: true });
 }

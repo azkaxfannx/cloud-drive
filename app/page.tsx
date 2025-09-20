@@ -51,6 +51,7 @@ export default function Home() {
     setUploading(true);
     const fileId = `${Date.now()}-${selectedFile.name}`;
     const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
+    let uploadedBytes = 0;
 
     for (let i = 0; i < totalChunks; i++) {
       const chunk = selectedFile.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
@@ -59,34 +60,61 @@ export default function Home() {
       formData.append("fileId", fileId);
       formData.append("chunkIndex", i.toString());
 
-      await fetch("/api/upload-chunk", {
-        method: "POST",
-        body: formData,
-      });
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload-chunk");
 
-      setUploadProgress(Math.floor(((i + 1) / totalChunks) * 100));
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            // Update progress berdasarkan total file
+            const chunkProgress = event.loaded;
+            setUploadProgress(
+              Math.floor(
+                ((uploadedBytes + chunkProgress) / selectedFile.size) * 100
+              )
+            );
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            uploadedBytes += chunk.size; // update uploaded bytes
+            resolve();
+          } else {
+            reject(new Error(`Chunk upload failed: ${xhr.statusText}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Chunk upload failed"));
+        xhr.send(formData);
+      });
     }
 
     // Merge chunks
-    const res = await fetch("/api/upload-complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileId,
-        filename: selectedFile.name,
-        totalChunks,
-        mimetype: selectedFile.type,
-      }),
-    });
+    try {
+      const res = await fetch("/api/upload-complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId,
+          filename: selectedFile.name,
+          totalChunks,
+          mimetype: selectedFile.type,
+        }),
+      });
 
-    const data = await res.json();
-    if (data.success) {
-      alert("Upload complete!");
-      setSelectedFile(null);
-      setUploadProgress(0);
-      fetchFiles();
-    } else {
-      alert("Upload failed: " + data.error);
+      const data = await res.json();
+      if (data.success) {
+        alert("Upload complete!");
+        setSelectedFile(null);
+        setUploadProgress(0);
+        fetchFiles();
+      } else {
+        alert("Upload failed: " + data.error);
+      }
+    } catch (err) {
+      alert("Upload failed");
+      console.error(err);
     }
 
     setUploading(false);

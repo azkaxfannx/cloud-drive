@@ -20,12 +20,23 @@ export async function POST(req: Request) {
   const writeStream = fs.createWriteStream(finalPath);
 
   for (let i = 0; i < totalChunks; i++) {
-    const chunkPath = path.join(uploadDir, `${fileId}-${i}`);
-    if (!fs.existsSync(chunkPath)) continue;
+    const chunkPath = path.join(uploadDir, fileId, `${i}`);
+    if (!fs.existsSync(chunkPath)) {
+      writeStream.close();
+      return NextResponse.json(
+        { success: false, error: `Chunk ${i} missing` },
+        { status: 400 }
+      );
+    }
     const data = fs.readFileSync(chunkPath);
     writeStream.write(data);
-    fs.unlinkSync(chunkPath); // hapus chunk setelah merge
+    fs.unlinkSync(chunkPath);
   }
+
+  await new Promise<void>((resolve, reject) => {
+    writeStream.on("finish", () => resolve());
+    writeStream.on("error", (err) => reject(err));
+  });
 
   writeStream.end();
 
