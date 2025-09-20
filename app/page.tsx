@@ -288,7 +288,74 @@ export default function Home() {
           )}
         </header>
 
-        {/* ... Rest of the code remains the same ... */}
+        {/* Files List */}
+        <section className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            📋 Files{" "}
+            <span className="text-gray-500 text-sm">({files.length})</span>
+          </h2>
+
+          {files.length === 0 ? (
+            <p className="text-gray-500 text-center py-12 text-sm">
+              No files uploaded yet. Upload your first file above!
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-gray-700">
+                    <th className="p-3 font-semibold">File Name</th>
+                    <th className="p-3 font-semibold">Size</th>
+                    <th className="p-3 font-semibold">Type</th>
+                    <th className="p-3 font-semibold">Uploaded</th>
+                    <th className="p-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {files.map((file) => (
+                    <tr
+                      key={file.id}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="p-3 font-medium text-gray-900">
+                        {file.originalName}
+                      </td>
+                      <td className="p-3 text-gray-700">
+                        {formatFileSize(file.filesize)}
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                          {file.mimetype}
+                        </span>
+                      </td>
+                      <td className="p-3 text-gray-700">
+                        {formatDate(file.uploadDate)}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              handleDownload(file.id, file.originalName)
+                            }
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium shadow transition"
+                          >
+                            📥 Download
+                          </button>
+                          <button
+                            onClick={() => handleDelete(file.id)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium shadow transition"
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
