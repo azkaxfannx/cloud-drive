@@ -31,54 +31,56 @@ export async function GET(
       );
     }
 
+    // Get file stats for content-length header
     const stats = fs.statSync(file.filepath);
     const fileSize = stats.size;
+
+    // Handle range requests for partial content (optional but recommended)
     const range = req.headers.get("range");
 
-    // Common headers
-    const commonHeaders = {
-      "Content-Type": file.mimetype || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(
-        file.originalName
-      )}"`,
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "public, max-age=3600",
-      ETag: `"${fileId}"`,
-      "X-Content-Type-Options": "nosniff",
-    };
-
     if (range) {
+      // Handle range request for partial content
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-      if (start >= fileSize || end >= fileSize) {
-        return NextResponse.json(
-          { error: "Range not satisfiable" },
-          { status: 416 }
-        );
-      }
-
       const chunksize = end - start + 1;
+
       const fileStream = fs.createReadStream(file.filepath, { start, end });
+
+      const headers = {
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunksize.toString(),
+        "Content-Type": file.mimetype || "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(
+          file.originalName
+        )}"`,
+      };
 
       return new Response(fileStream as any, {
         status: 206,
-        headers: {
-          ...commonHeaders,
-          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-          "Content-Length": chunksize.toString(),
-        },
+        headers,
       });
     } else {
+      // Full file download with streaming
       const fileStream = fs.createReadStream(file.filepath);
+
+      const headers = {
+        "Content-Length": fileSize.toString(),
+        "Content-Type": file.mimetype || "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(
+          file.originalName
+        )}"`,
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=3600", // Cache 1 jam
+        ETag: `"${fileId}"`, // Untuk conditional requests
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'",
+      };
 
       return new Response(fileStream as any, {
         status: 200,
-        headers: {
-          ...commonHeaders,
-          "Content-Length": fileSize.toString(),
-        },
+        headers,
       });
     }
   } catch (err: any) {
