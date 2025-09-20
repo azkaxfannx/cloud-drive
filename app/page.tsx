@@ -52,6 +52,18 @@ export default function Home() {
 
   const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
 
+  const getOptimalChunkSize = (fileSize: number) => {
+    if (fileSize > 1024 * 1024 * 1024) {
+      // > 1GB
+      return 10 * 1024 * 1024; // 10MB
+    } else if (fileSize > 100 * 1024 * 1024) {
+      // > 100MB
+      return 5 * 1024 * 1024; // 5MB
+    } else {
+      return 2 * 1024 * 1024; // 2MB
+    }
+  };
+
   const handleUpload = async () => {
     if (selectedFiles.length === 0) return alert("Select files first");
 
@@ -71,92 +83,89 @@ export default function Home() {
     setUploadingFiles(initialUploadingFiles);
 
     // Upload semua file secara paralel
-    const uploadPromises = initialUploadingFiles.map(
-      async (uploadingFile, index) => {
-        const { file, fileId } = uploadingFile;
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-        let uploadedBytes = 0;
+    const uploadPromises = initialUploadingFiles.map(async (uploadingFile) => {
+      const { file, fileId } = uploadingFile;
+      const CHUNK_SIZE = getOptimalChunkSize(file.size);
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      let uploadedBytes = 0;
 
-        for (let i = 0; i < totalChunks; i++) {
-          const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-          const formData = new FormData();
-          formData.append("chunk", chunk);
-          formData.append("fileId", fileId);
-          formData.append("chunkIndex", i.toString());
+      for (let i = 0; i < totalChunks; i++) {
+        const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const formData = new FormData();
+        formData.append("chunk", chunk);
+        formData.append("fileId", fileId);
+        formData.append("chunkIndex", i.toString());
 
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/api/upload-chunk");
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/upload-chunk");
 
-            xhr.onload = () => {
-              if (xhr.status === 200) {
-                uploadedBytes += chunk.size;
+          xhr.onload = () => {
+            if (xhr.status === 200) {
+              uploadedBytes += chunk.size;
 
-                // Update progress untuk file ini
-                setUploadingFiles((prev) =>
-                  prev.map((uf) =>
-                    uf.fileId === fileId
-                      ? {
-                          ...uf,
-                          progress: Math.floor(
-                            (uploadedBytes / file.size) * 100
-                          ),
-                        }
-                      : uf
-                  )
-                );
+              // Update progress untuk file ini
+              setUploadingFiles((prev) =>
+                prev.map((uf) =>
+                  uf.fileId === fileId
+                    ? {
+                        ...uf,
+                        progress: Math.floor((uploadedBytes / file.size) * 100),
+                      }
+                    : uf
+                )
+              );
 
-                resolve();
-              } else {
-                reject(new Error(`Chunk upload failed: ${xhr.statusText}`));
-              }
-            };
+              resolve();
+            } else {
+              reject(new Error(`Chunk upload failed: ${xhr.statusText}`));
+            }
+          };
 
-            xhr.upload.onprogress = (event) => {
-              if (event.lengthComputable) {
-                const chunkProgress = event.loaded;
-                const currentProgress = Math.floor(
-                  ((uploadedBytes + chunkProgress) / file.size) * 100
-                );
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const chunkProgress = event.loaded;
+              const currentProgress = Math.floor(
+                ((uploadedBytes + chunkProgress) / file.size) * 100
+              );
 
-                // Update progress real-time
-                setUploadingFiles((prev) =>
-                  prev.map((uf) =>
-                    uf.fileId === fileId
-                      ? { ...uf, progress: currentProgress }
-                      : uf
-                  )
-                );
-              }
-            };
+              // Update progress real-time
+              setUploadingFiles((prev) =>
+                prev.map((uf) =>
+                  uf.fileId === fileId
+                    ? { ...uf, progress: currentProgress }
+                    : uf
+                )
+              );
+            }
+          };
 
-            xhr.onerror = () => reject(new Error("Chunk upload failed"));
-            xhr.send(formData);
-          });
-        }
-
-        // Merge chunks untuk file ini
-        try {
-          const res = await fetch("/api/upload-complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fileId,
-              filename: file.name,
-              totalChunks,
-              mimetype: file.type,
-            }),
-          });
-
-          const data = await res.json();
-          if (!data.success) {
-            console.error(`Upload failed for ${file.name}:`, data.error);
-          }
-        } catch (err) {
-          console.error(`Upload failed for ${file.name}:`, err);
-        }
+          xhr.onerror = () => reject(new Error("Chunk upload failed"));
+          xhr.send(formData);
+        });
       }
-    );
+
+      // Merge chunks untuk file ini
+      try {
+        const res = await fetch("/api/upload-complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileId,
+            filename: file.name,
+            totalChunks,
+            mimetype: file.type,
+          }),
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          console.error(`Upload failed for ${file.name}:`, data.error);
+        }
+      } catch (err) {
+        console.error(`Upload failed for ${file.name}:`, err);
+      }
+    });
 
     // Tunggu semua upload selesai
     try {
