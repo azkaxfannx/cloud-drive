@@ -43,50 +43,53 @@ export default function Home() {
     setSelectedFile(e.target.files?.[0] || null);
   };
 
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+
   const handleUpload = async () => {
-    if (!selectedFile) return alert("Please select a file first");
+    if (!selectedFile) return alert("Select a file first");
 
     setUploading(true);
-    setUploadProgress(0);
+    const fileId = `${Date.now()}-${selectedFile.name}`;
+    const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = selectedFile.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const formData = new FormData();
+      formData.append("chunk", chunk);
+      formData.append("fileId", fileId);
+      formData.append("chunkIndex", i.toString());
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/upload");
+      await fetch("/api/upload-chunk", {
+        method: "POST",
+        body: formData,
+      });
 
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 100);
-        setUploadProgress(percent);
-      }
-    };
+      setUploadProgress(Math.floor(((i + 1) / totalChunks) * 100));
+    }
 
-    xhr.onload = async () => {
-      setUploading(false);
+    // Merge chunks
+    const res = await fetch("/api/upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileId,
+        filename: selectedFile.name,
+        totalChunks,
+        mimetype: selectedFile.type,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert("Upload complete!");
+      setSelectedFile(null);
       setUploadProgress(0);
-      if (xhr.status === 200) {
-        const data: ApiResponse = JSON.parse(xhr.responseText);
-        if (data.success) {
-          alert("File uploaded successfully!");
-          setSelectedFile(null);
-          (document.getElementById("fileInput") as HTMLInputElement).value = "";
-          await fetchFiles();
-        } else {
-          alert("Upload failed: " + data.error);
-        }
-      } else {
-        alert("Upload failed");
-      }
-    };
+      fetchFiles();
+    } else {
+      alert("Upload failed: " + data.error);
+    }
 
-    xhr.onerror = () => {
-      setUploading(false);
-      setUploadProgress(0);
-      alert("Upload failed");
-    };
-
-    xhr.send(formData);
+    setUploading(false);
   };
 
   const handleDownload = (fileId: number, fileName: string) => {
