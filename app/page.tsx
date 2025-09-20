@@ -1,103 +1,235 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, ChangeEvent } from "react";
+
+interface FileData {
+  id: number;
+  filename: string;
+  originalName: string;
+  filesize: string;
+  mimetype: string;
+  uploadDate: string;
+}
+
+interface ApiResponse {
+  success: boolean;
+  files?: FileData[];
+  file?: FileData;
+  message?: string;
+  error?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [files, setFiles] = useState<FileData[]>([]);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const fetchFiles = async () => {
+    try {
+      const res = await fetch("/api/files");
+      const data: ApiResponse = await res.json();
+      if (data.success && data.files) setFiles(data.files);
+    } catch (err) {
+      console.error("Error fetching files:", err);
+    }
+  };
+
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    setSelectedFile(e.target.files?.[0] || null);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return alert("Please select a file first");
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data: ApiResponse = await res.json();
+
+      if (data.success) {
+        alert("File uploaded successfully!");
+        setSelectedFile(null);
+        (document.getElementById("fileInput") as HTMLInputElement).value = "";
+        await fetchFiles();
+      } else {
+        alert("Upload failed: " + data.error);
+      }
+    } catch (err) {
+      alert("Upload failed");
+      console.error("Upload error:", err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownload = (fileId: number, fileName: string) => {
+    const link = document.createElement("a");
+    link.href = `/api/download/${fileId}`;
+    link.download = fileName;
+    link.click();
+  };
+
+  const handleDelete = async (fileId: number) => {
+    if (!confirm("Are you sure you want to delete this file?")) return;
+
+    try {
+      const res = await fetch(`/api/delete/${fileId}`, { method: "DELETE" });
+      const data: ApiResponse = await res.json();
+
+      if (data.success) {
+        alert("File deleted successfully!");
+        await fetchFiles();
+      } else {
+        alert("Delete failed: " + data.error);
+      }
+    } catch (err) {
+      alert("Delete failed");
+      console.error("Delete error:", err);
+    }
+  };
+
+  const formatFileSize = (bytes: string) => {
+    const num = parseInt(bytes, 10);
+    if (num === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(num) / Math.log(k));
+    return parseFloat((num / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("id-ID", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 font-sans">
+      <div className="max-w-6xl mx-auto p-6 space-y-6">
+        {/* Header */}
+        <header className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h1 className="text-4xl font-extrabold text-gray-900 mb-4 flex items-center gap-3">
+            <span className="text-blue-600">📁</span> Cloud Drive
+          </h1>
+
+          {/* Upload Section */}
+          <div className="flex flex-wrap items-center gap-4">
+            <input
+              id="fileInput"
+              type="file"
+              onChange={handleFileSelect}
+              className="file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 
+          file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 
+          hover:file:bg-blue-100 cursor-pointer text-sm text-gray-700"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+            <button
+              onClick={handleUpload}
+              disabled={uploading || !selectedFile}
+              className={`px-6 py-2.5 rounded-xl font-semibold text-white text-sm shadow transition
+          ${
+            uploading || !selectedFile
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
+            >
+              {uploading ? "⏳ Uploading..." : "📤 Upload File"}
+            </button>
+          </div>
+
+          {selectedFile && (
+            <p className="mt-3 text-sm text-gray-600">
+              Selected:{" "}
+              <span className="font-medium text-gray-800">
+                {selectedFile.name}
+              </span>{" "}
+              ({formatFileSize(selectedFile.size.toString())})
+            </p>
+          )}
+        </header>
+
+        {/* Files List */}
+        <section className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            📋 Files{" "}
+            <span className="text-gray-500 text-sm">({files.length})</span>
+          </h2>
+
+          {files.length === 0 ? (
+            <p className="text-gray-500 text-center py-12 text-sm">
+              No files uploaded yet. Upload your first file above!
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-gray-700">
+                    <th className="p-3 font-semibold">File Name</th>
+                    <th className="p-3 font-semibold">Size</th>
+                    <th className="p-3 font-semibold">Type</th>
+                    <th className="p-3 font-semibold">Uploaded</th>
+                    <th className="p-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {files.map((file) => (
+                    <tr
+                      key={file.id}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="p-3 font-medium text-gray-900">
+                        {file.originalName}
+                      </td>
+                      <td className="p-3 text-gray-700">
+                        {formatFileSize(file.filesize)}
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                          {file.mimetype}
+                        </span>
+                      </td>
+                      <td className="p-3 text-gray-700">
+                        {formatDate(file.uploadDate)}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              handleDownload(file.id, file.originalName)
+                            }
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium shadow transition"
+                          >
+                            📥 Download
+                          </button>
+                          <button
+                            onClick={() => handleDelete(file.id)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium shadow transition"
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
   );
 }
